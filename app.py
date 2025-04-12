@@ -167,3 +167,8 @@ def chat(data: ChatInput):
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/")
+def root():
+    return {"message": "✅ FastAPI Gemini Chatbot is live!"}
+
