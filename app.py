@@ -15,19 +15,21 @@ from gtts import gTTS
 import pygame
 import google.generativeai as genai
 
-# Load API key and configure Gemini
+# Load API key
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Use the best available Gemini model
+# Use latest Gemini model
 model = genai.GenerativeModel("models/gemini-1.5-pro-latest")
 
-# FastAPI setup
+# FastAPI app
 app = FastAPI()
 chat_history = []
 product_data = []
 
-# Load product data from local JSON/CSV if needed
+# ========================
+# Auto-load Product Data
+# ========================
 def load_local_product_data():
     global product_data
     try:
@@ -41,7 +43,9 @@ def load_local_product_data():
     except Exception as e:
         print(f"Error loading product data: {e}")
 
-# Upload product data
+# ========================
+# Upload Product File
+# ========================
 @app.post("/upload_products")
 async def upload_products(file: UploadFile = File(...)):
     global product_data
@@ -58,15 +62,39 @@ async def upload_products(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": str(e)}
 
-# Generate Gemini response
+# ========================
+# Detect Conversation Stage
+# ========================
+def detect_conversation_stage(prompt, role):
+    stage_detection_prompt = (
+        f"You are a role-play conversation assistant helping in a {role} scenario.\n"
+        f"Based on the user's message below, determine the most likely conversation stage.\n"
+        f"Possible stages: opening, discovery, presentation, objection_handling, closing, follow_up, general\n"
+        f"User message: \"{prompt}\"\n"
+        f"Reply with only one stage keyword (e.g., discovery or presentation)."
+    )
+    try:
+        response = genai.GenerativeModel("models/gemini-1.5-pro-latest").generate_content(stage_detection_prompt)
+        detected_stage = response.text.strip().lower()
+        valid_stages = {"opening", "discovery", "presentation", "objection_handling", "closing", "follow_up", "general"}
+        return detected_stage if detected_stage in valid_stages else "general"
+    except Exception:
+        return "general"
+
+# ========================
+# Generate Chat Response
+# ========================
 def generate_response(prompt, stage, role):
     if role == "seller" and not product_data:
         load_local_product_data()
 
+    if not stage or stage.lower() == "auto":
+        stage = detect_conversation_stage(prompt, role)
+
     context = {
-        "buyer": "You're a curious buyer looking for the best deal.",
-        "seller": "You're a persuasive, expert seller trying to close the deal naturally."
-    }.get(role, "You are discussing product-related topics.")
+        "buyer": f"You are a curious buyer. You are currently in the **{stage}** stage of the conversation.",
+        "seller": f"You are a helpful and persuasive seller. You are currently in the **{stage}** stage of the conversation."
+    }.get(role, f"You are having a product-related discussion (stage: {stage}).")
 
     products_text = "\n\n".join([
         f"- {p.get('name', 'Unknown')} (${p.get('price', 'N/A')})\n  Description: {p.get('description', '')}\n  Features: {p.get('features', '')}"
@@ -75,7 +103,7 @@ def generate_response(prompt, stage, role):
 
     system_prompt = (
         f"ROLE: {role.upper()}\n{context}\n\n=== Product Catalog ===\n{products_text}\n\n"
-        f"User says: {prompt}\nRespond naturally and persuasively to continue a role-play conversation."
+        f"User says: {prompt}\nRespond naturally and persuasively to continue the role-play conversation."
     )
 
     try:
@@ -86,17 +114,21 @@ def generate_response(prompt, stage, role):
     except Exception as e:
         return f"❌ Error generating response: {str(e)}"
 
+# ========================
 # Speech to Text
+# ========================
 def speech_to_text(file_path):
     recognizer = sr.Recognizer()
     try:
         with sr.AudioFile(file_path) as source:
             audio = recognizer.record(source)
             return recognizer.recognize_google(audio)
-    except Exception as e:
+    except Exception:
         return "❌ Speech processing failed."
 
+# ========================
 # Text to Speech
+# ========================
 def text_to_speech(text, filename="response.mp3"):
     try:
         tts = gTTS(text=text, lang='en')
@@ -111,19 +143,23 @@ def text_to_speech(text, filename="response.mp3"):
     except Exception as e:
         print(f"❌ TTS error: {e}")
 
-# Stream text
+# ========================
+# Stream Text Generator
+# ========================
 def stream_text(text):
     for line in text.split('\n'):
         yield line + '\n'
         time.sleep(0.2)
 
-# Voice/Text interaction
+# ========================
+# Interactive Endpoint
+# ========================
 @app.post("/interact")
 async def interact(
     input_type: Literal["text", "voice"] = Form(...),
     output_type: Literal["text", "voice"] = Form(...),
     role: Literal["seller", "buyer"] = Form(...),
-    stage: str = Form("general"),
+    stage: str = Form("auto"),
     prompt: str = Form(None),
     audio: UploadFile = File(None)
 ):
@@ -152,11 +188,13 @@ async def interact(
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-# JSON-based chat (for Postman or API clients)
+# ========================
+# Chat JSON Endpoint
+# ========================
 class ChatInput(BaseModel):
     prompt: str
     role: Literal["seller", "buyer"]
-    stage: str = "general"
+    stage: str = "auto"
 
 @app.post("/chat")
 def chat(data: ChatInput):
@@ -167,8 +205,10 @@ def chat(data: ChatInput):
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+# ========================
+# Optional Root Route
+# ========================
 @app.get("/")
 def root():
-    return {"message": "✅ FastAPI Gemini Chatbot is live!"}
-
+    return {"message": "✅ FastAPI Gemini chatbot with dynamic role-play is live!"}
