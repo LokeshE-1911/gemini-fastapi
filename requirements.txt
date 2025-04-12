@@ -2,6 +2,9 @@ fastapi
 uvicorn
 python-dotenv
 google-generativeai
-speechrecognition
 gtts
-playsound
+pygame
+pydantic
+requests
+speechrecognition
+scipy

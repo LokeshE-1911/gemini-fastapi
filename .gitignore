@@ -6,3 +6,7 @@ __pycache__/
 .env
 .DS_Store
 *.mp3
+cli_interact_client.py
+fastapp.py
+input.wav
+main.py

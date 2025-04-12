@@ -1,0 +1,15 @@
+[
+    {
+      "name": "iPhone 15 Pro",
+      "price": "999",
+      "description": "Latest iPhone with advanced camera and titanium frame.",
+      "features": "A17 chip, 256GB storage, ProMotion display"
+    },
+    {
+      "name": "MacBook Air M2",
+      "price": "1299",
+      "description": "Ultra-thin and powerful MacBook for productivity.",
+      "features": "13-inch Retina, 8GB RAM, 256GB SSD"
+    }
+  ]
+  
